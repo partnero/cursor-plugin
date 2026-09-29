@@ -1,0 +1,96 @@
+---
+description: Correctness constraints for Partnero tracking code — canonical script host, the real REST endpoints, and the rules that decide whether a partner gets paid. Apply whenever writing or reviewing code that calls api.partnero.com or loads the Partnero tracking script.
+alwaysApply: false
+---
+
+# Partnero API
+
+## The tracking script
+
+There is exactly one host that serves the Partnero tracking script:
+
+```
+https://app.partnero.com/js/universal.js
+```
+
+`cdn.partnero.com`, `js.partnero.com` and `static.partnero.com` do not exist. If
+existing code points at one of those, that is the bug — a snippet generated from
+a guessed hostname. Replace the host, do not debug DNS.
+
+The only valid init call is `po('program', 'PROGRAM_ID', 'load')`. There is no
+`po('init', ...)`, and the program ID is never passed as a query parameter on the
+script URL.
+
+## Reading the program instead of asking
+
+When the Partnero MCP server is connected, `get_program` answers most of the
+setup questions without bothering the user:
+
+| Field | Use |
+| --- | --- |
+| `program.public_id` | The ID in `po('program', …, 'load')` |
+| `program.type` | `Affiliate`, `Referral` or `Newsletter` — decides the payload shape |
+| `program.website` | The site tracking belongs on |
+| `program_settings.ref_link_format` | `query` or `link` — the shape of a referral URL |
+| `program_settings.ref_link_param` | The query parameter, e.g. `aff` |
+| `program_settings.cookie_lifetime` | Attribution window in days |
+| `program_settings.currency` | Whether `amount_units` needs sending |
+| `portal_settings.partner_portal_url` | Where partners sign up and get links |
+
+`ref_link_format` and `ref_link_param` together tell you what a real referral
+link looks like for this program — with `query` and `aff`, it's
+`https://site.com/?aff=PARTNER_KEY`. Use that to build a test URL instead of
+guessing at `?ref=`.
+
+The API key is not available through MCP and never will be. It lives in the
+Partnero dashboard under **Integration → API**. Ask the user for it, and have
+them put it in an environment variable rather than in the source.
+
+## Endpoints
+
+Base URL `https://api.partnero.com/v1`, `Authorization: Bearer <API key>` on every
+request, `Content-Type: application/json`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/customers` | Create a customer, optionally attributed to a partner or referrer |
+| GET | `/customers/{key}` | Customer details, including `referral_link` |
+| GET | `/customers/{key}/stats` | Click and referral counts, social share links |
+| GET | `/customers/{key}/balance` | Reward balance by currency |
+| GET | `/customers/{key}/referrals` | Customers this customer referred |
+| POST | `/transactions` | Record a sale so commission is earned |
+| DELETE | `/transactions/{key}` | Reverse a commission after a refund |
+
+Do not invent endpoints, paths, query parameters or body fields. If something
+isn't covered above, say it isn't available through the API and point at
+<https://docs.partnero.com/api-reference/introduction> rather than guessing a
+plausible-looking route.
+
+## Rules that decide whether a partner gets paid
+
+- **Which sign-ups to send depends on the program type.** In a refer-a-friend
+  program, send every sign-up: the referrer is optional, and each customer needs
+  their own referral link. In an affiliate program, a customer only exists in the
+  context of a partner — `POST /v1/customers` rejects a request with no
+  `partner.key`, `partner.email` or `partner.id`, and rejects a partner key that
+  doesn't resolve. Send those only when the attribution cookie is present.
+- **Use the same customer key in both calls.** The `key` sent to `/customers` is
+  what `/transactions` matches on. A mismatch means the sale is recorded against
+  nobody. Use your internal user ID or email, and use it consistently.
+- **Use the order or invoice ID as the transaction `key`.** Refunds are handled by
+  `DELETE /transactions/{key}`, which is only possible if the key is something you
+  can still look up later.
+- **Make every call non-blocking.** Wrap it in try/catch and never let a Partnero
+  failure break a sign-up, a checkout or a refund.
+- **Keep the API key server-side.** Never call `api.partnero.com` from browser or
+  mobile code — route through your own backend.
+
+## Attribution cookies
+
+The tracking script writes a first-party cookie when a visitor arrives through a
+referral link. Which one depends on the program type:
+
+- Affiliate programs: `partnero_partner`, sent as `partner.key`
+- Refer-a-friend programs: `partnero_referral`, sent as `referring_customer.key`
+
+Read the cookie on the server from the incoming request headers during sign-up.

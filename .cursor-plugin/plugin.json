@@ -1,0 +1,21 @@
+{
+  "name": "partnero",
+  "version": "1.0.0",
+  "description": "Manage your Partnero affiliate and referral program from the agent, and add Partnero tracking to your codebase correctly the first time.",
+  "author": {
+    "name": "Partnero",
+    "email": "hello@partnero.com"
+  },
+  "homepage": "https://www.partnero.com",
+  "repository": "https://github.com/partnero/cursor-plugin",
+  "license": "MIT",
+  "keywords": [
+    "partnero",
+    "affiliate",
+    "referral",
+    "partners",
+    "mcp",
+    "analytics"
+  ],
+  "logo": "assets/logo.svg"
+}

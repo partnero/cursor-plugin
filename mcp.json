@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "partnero": {
+      "url": "https://api.partnero.com/mcp"
+    }
+  }
+}
