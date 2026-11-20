@@ -19,7 +19,7 @@ Otherwise the same list is in the dashboard under the webhook form.
 The full vocabulary, of which each program exposes a subset:
 
 - Partners: `partner.created`, `partner.updated`, `partner.deleted`,
-  `partner.approved`, `partner.rejected`, `partner.archived`, `partner.rewarded`
+  `partner.approved`, `partner.rejected`, `partner.archived`
 - Customers: `customer.created`, `customer.updated`, `customer.deleted`,
   `customer.rewarded`, `customer.credited`
 - Transactions: `transaction.created`, `transaction.deleted`
@@ -27,9 +27,14 @@ The full vocabulary, of which each program exposes a subset:
 - Subscribers: `subscriber.created`, `subscriber.updated`,
   `subscriber.deleted`, `subscriber.rewarded`
 
-The `.rewarded` and `.credited` events are the ones worth wiring up if you're
-mirroring earnings into another system — they fire when commission is actually
-granted, which `transaction.created` doesn't tell you.
+If you're mirroring earnings into another system:
+
+- Refer-a-friend programs send `customer.rewarded` and `customer.credited`, and
+  newsletter programs send `subscriber.rewarded`, when a reward is granted.
+- Affiliate programs have no reward event. `transaction.created` carries a
+  `rewards` array with each commission's `id` (`rwd_...`); store it and read the
+  commission's `payout_status` later with `get_reward` or `GET /v1/rewards/{id}`.
+  No event fires when a commission is approved or paid.
 
 ## 2. Write the endpoint
 
@@ -51,8 +56,8 @@ Requirements for the handler:
 - Respond `200` within a few seconds. Do the real work in a queue or background
   job — a slow handler is treated as a failure and retried.
 - Be idempotent. Retries mean the same event can arrive more than once. Key your
-  processing on something stable from `data` (the transaction or customer key),
-  not on receipt order.
+  processing on something stable from `data` (the transaction or customer key,
+  or the reward `id`), not on receipt order.
 - Log the raw body before processing. Webhook bugs are impossible to diagnose
   after the fact without it.
 - Ignore unknown event names instead of erroring, so new events don't break you.

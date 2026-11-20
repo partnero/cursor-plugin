@@ -88,8 +88,19 @@ recorded against nobody. Compare the two values literally, including case.
 ## 4. Was a reward generated?
 
 The transaction payload carries a `rewards` array. If it has entries, the
-commission exists — use `get_reward` for the detail, or `list_rewards` for the
-program-wide picture.
+commission exists. Pass a reward's `id` (`rwd_...`, not its `key` — every reward
+of a transaction shares the key) to `get_reward`, or call `list_rewards` with
+`transaction` set to the transaction key to see all of them with their
+`payout_status`. These reward tools only work in affiliate programs.
+
+**A reward exists but the partner wasn't paid** — the `payout_status` says why:
+
+- `in_review` — still in the commission review period, not payable yet. With
+  the **Until manually approved** review period it stays there until someone
+  approves it. Tell the user; don't call `approve_reward` yourself.
+- `available` — approved and owed, just not paid out yet.
+- `declined`, `rejected`, `fraudulent`, `expired` or `other` — the commission
+  was settled as not payable. That's a decision or a rule, not a tracking bug.
 
 **Empty `rewards`** with everything else intact means the transaction was
 recorded but earned nothing. Check, in this order:
